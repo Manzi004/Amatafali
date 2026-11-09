@@ -1,3 +1,6 @@
+
+#board { touch-action: none; }
+
 :root {
     --bg: #eef1ee;
     --panel: #ffffff;
@@ -83,4 +86,5 @@
     cursor: pointer;
   }
   button:active { transform: scale(0.96); }
-  .start { grid-column: 1 / -1; font-size: 16px; }
+  .start { grid-column: span 3; font-size: 16px; }
+  .pause { grid-column: span 2; font-size: 16px; }
