@@ -430,3 +430,4 @@ function gameLoop(time) {
 
 updateHud();
 requestAnimationFrame(gameLoop);
+
