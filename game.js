@@ -108,19 +108,100 @@ function lockPiece() {
   });
 }
 
-// ---------- Game loop ----------
-function gameLoop(time) {
-  dropTimer += time - lastTime;
-  lastTime = time;
-
-  if (dropTimer >= DROP_SPEED) {
-    dropTimer = 0;
+// ---------- Moving and rotating ----------
+function rotateShape(shape) {
+    // Turn the grid 90 degrees clockwise
+    return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+  }
+  
+  function movePiece(dx) {
+    if (!collides(piece.shape, piece.x + dx, piece.y)) {
+      piece.x += dx;
+    }
+  }
+  
+  function rotatePiece() {
+    const rotated = rotateShape(piece.shape);
+    // Try in place first, then nudge left or right if it hits a wall
+    const kicks = [0, -1, 1, -2, 2];
+    for (const kick of kicks) {
+      if (!collides(rotated, piece.x + kick, piece.y)) {
+        piece.shape = rotated;
+        piece.x += kick;
+        return;
+      }
+    }
+  }
+  
+  function softDrop() {
     if (!collides(piece.shape, piece.x, piece.y + 1)) {
       piece.y++;
     } else {
       lockPiece();
       spawnPiece();
     }
+    dropTimer = 0;
+  }
+  
+  function hardDrop() {
+    while (!collides(piece.shape, piece.x, piece.y + 1)) {
+      piece.y++;
+    }
+    lockPiece();
+    spawnPiece();
+    dropTimer = 0;
+  }
+  
+  function restart() {
+    board = createBoard();
+    spawnPiece();
+    dropTimer = 0;
+  }
+  
+  // ---------- Controls ----------
+  function act(action) {
+    switch (action) {
+      case 'left':   movePiece(-1); break;
+      case 'right':  movePiece(1);  break;
+      case 'rotate': rotatePiece(); break;
+      case 'down':   softDrop();    break;
+      case 'drop':   hardDrop();    break;
+      case 'start':  restart();     break;
+    }
+  }
+  
+  document.addEventListener('keydown', (e) => {
+    const keys = {
+      ArrowLeft: 'left',
+      ArrowRight: 'right',
+      ArrowUp: 'rotate',
+      ArrowDown: 'down',
+      ' ': 'drop',
+      Enter: 'start'
+    };
+    const action = keys[e.key];
+    if (action) {
+      e.preventDefault();
+      act(action);
+    }
+  });
+  
+  document.querySelectorAll('button[data-a]').forEach((btn) => {
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      act(btn.dataset.a);
+    });
+  });
+
+
+
+// ---------- Game loop ----------
+function gameLoop(time) {
+  dropTimer += time - lastTime;
+  lastTime = time;
+
+  if (dropTimer >= DROP_SPEED) {
+    softDrop();
   }
 
   render();
