@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AMATAFALI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <div class="game">
+      <canvas id="board" width="300" height="600"></canvas>
+      <div class="side">
+        <div class="box"><small>Next</small><canvas id="next" width="80" height="80"></canvas></div>
+        <div class="box"><small>Score</small><b id="score">0</b></div>
+        <div class="box"><small>Level</small><b id="level">1</b></div>
+        <div class="box"><small>Lines</small><b id="lines">0</b></div>
+      </div>
+    </div>
+    <div class="pad">
+      <button data-a="left">&#9664;</button>
+      <button data-a="rotate">&#10227;</button>
+      <button data-a="right">&#9654;</button>
+      <button data-a="down">&#9660;</button>
+      <button data-a="drop">&#10515;</button>
+      <button class="start" data-a="start">Start / Restart</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
