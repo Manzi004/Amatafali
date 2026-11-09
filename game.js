@@ -2,7 +2,7 @@
 const COLS = 10;
 const ROWS = 20;
 const CELL = 30;
-const DROP_SPEED = 800; // milliseconds between each step down
+const LINE_POINTS = [0, 100, 300, 500, 800];
 
 // ---------- The 7 pieces ----------
 const SHAPES = {
@@ -25,9 +25,11 @@ const COLORS = {
   L: '#ee8b32'
 };
 
-// ---------- Canvas ----------
+// ---------- Canvases ----------
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next');
+const nextCtx = nextCanvas.getContext('2d');
 
 // ---------- The board ----------
 function createBoard() {
@@ -38,8 +40,24 @@ let board = createBoard();
 
 // ---------- Game state ----------
 let piece = null;
+let nextType = null;
+let score = 0;
+let lines = 0;
+let level = 1;
+let gameOver = false;
 let dropTimer = 0;
 let lastTime = performance.now();
+
+function dropSpeed() {
+  // Faster at higher levels, but never faster than 100 ms
+  return Math.max(100, 800 - (level - 1) * 70);
+}
+
+function updateHud() {
+  document.getElementById('score').textContent = score;
+  document.getElementById('level').textContent = level;
+  document.getElementById('lines').textContent = lines;
+}
 
 // ---------- Drawing ----------
 function drawCell(x, y, color) {
@@ -64,9 +82,38 @@ function drawPiece(p) {
   });
 }
 
+function drawNext() {
+  nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  if (!nextType) return;
+  const shape = SHAPES[nextType];
+  const size = 20;
+  const offsetX = (nextCanvas.width - shape[0].length * size) / 2;
+  const offsetY = (nextCanvas.height - shape.length * size) / 2;
+  nextCtx.fillStyle = COLORS[nextType];
+  shape.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value) {
+        nextCtx.fillRect(offsetX + x * size + 1, offsetY + y * size + 1, size - 2, size - 2);
+      }
+    });
+  });
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(10, 16, 18, 0.75)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 30px "Trebuchet MS", sans-serif';
+  ctx.fillText('Game over', canvas.width / 2, canvas.height / 2 - 6);
+  ctx.font = '15px "Trebuchet MS", sans-serif';
+  ctx.fillText('Press Enter or tap Restart', canvas.width / 2, canvas.height / 2 + 22);
+}
+
 function render() {
   drawBoard();
-  if (piece) drawPiece(piece);
+  if (piece && !gameOver) drawPiece(piece);
+  if (gameOver) drawGameOver();
 }
 
 // ---------- Pieces ----------
@@ -76,7 +123,8 @@ function randomType() {
 }
 
 function spawnPiece() {
-  const type = randomType();
+  const type = nextType || randomType();
+  nextType = randomType();
   const shape = SHAPES[type].map(row => row.slice());
   piece = {
     type: type,
@@ -84,6 +132,11 @@ function spawnPiece() {
     x: Math.floor((COLS - shape[0].length) / 2),
     y: 0
   };
+  drawNext();
+  // If the new piece has no room, the game is over
+  if (collides(piece.shape, piece.x, piece.y)) {
+    gameOver = true;
+  }
 }
 
 // ---------- Collision ----------
@@ -106,102 +159,136 @@ function lockPiece() {
       if (value) board[piece.y + y][piece.x + x] = piece.type;
     });
   });
+  clearLines();
+}
+
+// ---------- Clearing lines ----------
+function clearLines() {
+  let cleared = 0;
+  for (let y = ROWS - 1; y >= 0; y--) {
+    if (board[y].every(cell => cell !== null)) {
+      board.splice(y, 1);                          // remove the full row
+      board.unshift(Array(COLS).fill(null));       // add an empty row at the top
+      cleared++;
+      y++;                                         // check this row number again
+    }
+  }
+  if (cleared > 0) {
+    score += LINE_POINTS[cleared] * level;
+    lines += cleared;
+    level = 1 + Math.floor(lines / 10);
+    updateHud();
+  }
 }
 
 // ---------- Moving and rotating ----------
 function rotateShape(shape) {
-    // Turn the grid 90 degrees clockwise
-    return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+  return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+}
+
+function movePiece(dx) {
+  if (!collides(piece.shape, piece.x + dx, piece.y)) {
+    piece.x += dx;
   }
-  
-  function movePiece(dx) {
-    if (!collides(piece.shape, piece.x + dx, piece.y)) {
-      piece.x += dx;
+}
+
+function rotatePiece() {
+  const rotated = rotateShape(piece.shape);
+  const kicks = [0, -1, 1, -2, 2];
+  for (const kick of kicks) {
+    if (!collides(rotated, piece.x + kick, piece.y)) {
+      piece.shape = rotated;
+      piece.x += kick;
+      return;
     }
   }
-  
-  function rotatePiece() {
-    const rotated = rotateShape(piece.shape);
-    // Try in place first, then nudge left or right if it hits a wall
-    const kicks = [0, -1, 1, -2, 2];
-    for (const kick of kicks) {
-      if (!collides(rotated, piece.x + kick, piece.y)) {
-        piece.shape = rotated;
-        piece.x += kick;
-        return;
-      }
+}
+
+function softDrop(byPlayer) {
+  if (!collides(piece.shape, piece.x, piece.y + 1)) {
+    piece.y++;
+    if (byPlayer) {
+      score += 1;
+      updateHud();
     }
-  }
-  
-  function softDrop() {
-    if (!collides(piece.shape, piece.x, piece.y + 1)) {
-      piece.y++;
-    } else {
-      lockPiece();
-      spawnPiece();
-    }
-    dropTimer = 0;
-  }
-  
-  function hardDrop() {
-    while (!collides(piece.shape, piece.x, piece.y + 1)) {
-      piece.y++;
-    }
+  } else {
     lockPiece();
     spawnPiece();
-    dropTimer = 0;
   }
-  
-  function restart() {
-    board = createBoard();
-    spawnPiece();
-    dropTimer = 0;
-  }
-  
-  // ---------- Controls ----------
-  function act(action) {
-    switch (action) {
-      case 'left':   movePiece(-1); break;
-      case 'right':  movePiece(1);  break;
-      case 'rotate': rotatePiece(); break;
-      case 'down':   softDrop();    break;
-      case 'drop':   hardDrop();    break;
-      case 'start':  restart();     break;
-    }
-  }
-  
-  document.addEventListener('keydown', (e) => {
-    const keys = {
-      ArrowLeft: 'left',
-      ArrowRight: 'right',
-      ArrowUp: 'rotate',
-      ArrowDown: 'down',
-      ' ': 'drop',
-      Enter: 'start'
-    };
-    const action = keys[e.key];
-    if (action) {
-      e.preventDefault();
-      act(action);
-    }
-  });
-  
-  document.querySelectorAll('button[data-a]').forEach((btn) => {
-    btn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      act(btn.dataset.a);
-    });
-  });
+  dropTimer = 0;
+}
 
+function hardDrop() {
+  let distance = 0;
+  while (!collides(piece.shape, piece.x, piece.y + 1)) {
+    piece.y++;
+    distance++;
+  }
+  score += distance * 2;
+  updateHud();
+  lockPiece();
+  spawnPiece();
+  dropTimer = 0;
+}
 
+function restart() {
+  board = createBoard();
+  score = 0;
+  lines = 0;
+  level = 1;
+  gameOver = false;
+  nextType = null;
+  dropTimer = 0;
+  spawnPiece();
+  updateHud();
+}
+
+// ---------- Controls ----------
+function act(action) {
+  if (action === 'start') {
+    restart();
+    return;
+  }
+  if (gameOver) return;
+  switch (action) {
+    case 'left':   movePiece(-1);  break;
+    case 'right':  movePiece(1);   break;
+    case 'rotate': rotatePiece();  break;
+    case 'down':   softDrop(true); break;
+    case 'drop':   hardDrop();     break;
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const keys = {
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    ArrowUp: 'rotate',
+    ArrowDown: 'down',
+    ' ': 'drop',
+    Enter: 'start'
+  };
+  const action = keys[e.key];
+  if (action) {
+    e.preventDefault();
+    act(action);
+  }
+});
+
+document.querySelectorAll('button[data-a]').forEach((btn) => {
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    act(btn.dataset.a);
+  });
+});
 
 // ---------- Game loop ----------
 function gameLoop(time) {
   dropTimer += time - lastTime;
   lastTime = time;
 
-  if (dropTimer >= DROP_SPEED) {
-    softDrop();
+  if (!gameOver && dropTimer >= dropSpeed()) {
+    softDrop(false);
   }
 
   render();
@@ -209,4 +296,5 @@ function gameLoop(time) {
 }
 
 spawnPiece();
+updateHud();
 requestAnimationFrame(gameLoop);
