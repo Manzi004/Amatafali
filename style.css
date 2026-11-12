@@ -1,92 +1,105 @@
-
-#board { touch-action: none; }
-
 :root {
-    --bg: #eef1ee;
-    --panel: #ffffff;
-    --ink: #1b2a2f;
-    --muted: #5d6f73;
-    --board: #dfe6e3;
-    --btn: #1b2a2f;
-    --btn-ink: #eef1ee;
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #10181b;
-      --panel: #18242a;
-      --ink: #e6eeeb;
-      --muted: #8fa4a8;
-      --board: #0c1316;
-      --btn: #e6eeeb;
-      --btn-ink: #10181b;
-    }
-  }
-  
-  * { box-sizing: border-box; }
-  
-  html, body { margin: 0; height: 100%; }
-  
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    user-select: none;
-    touch-action: manipulation;
-  }
-  
-  .app {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-  }
-  
-  .game { display: flex; gap: 14px; align-items: flex-start; }
-  
-  #board {
-    height: min(62vh, 600px);
-    aspect-ratio: 1 / 2;
-    background: var(--board);
-    border-radius: 6px;
-    display: block;
-  }
-  
-  .side { display: flex; flex-direction: column; gap: 10px; width: 96px; }
-  
-  .box { background: var(--panel); border-radius: 6px; padding: 10px; }
-  .box small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  .box b { font-size: 22px; }
-  
-  #next { width: 100%; aspect-ratio: 1 / 1; display: block; }
-  
-  .pad {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    width: 100%;
-    max-width: 420px;
-  }
-  
-  button {
-    font: inherit;
-    background: var(--btn);
-    color: var(--btn-ink);
-    border: 0;
-    border-radius: 6px;
-    padding: 12px 0;
-    font-size: 18px;
-    cursor: pointer;
-  }
-  button:active { transform: scale(0.96); }
-  .start { grid-column: span 3; font-size: 16px; }
-  .pause { grid-column: span 2; font-size: 16px; }
+  --bg: #eef1ee;
+  --panel: #ffffff;
+  --ink: #1b2a2f;
+  --muted: #5d6f73;
+  --board: #dfe6e3;
+  --btn: #1b2a2f;
+  --btn-ink: #eef1ee;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
 
-  
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10181b;
+    --panel: #18242a;
+    --ink: #e6eeeb;
+    --muted: #8fa4a8;
+    --board: #0c1316;
+    --btn: #e6eeeb;
+    --btn-ink: #10181b;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+/* The board on the left, the side column on the right */
+.game { display: flex; gap: 14px; align-items: stretch; }
+
+#board {
+  height: min(62vh, 600px);
+  aspect-ratio: 1 / 2;
+  background: var(--board);
+  border-radius: 6px;
+  display: block;
+  touch-action: none;
+}
+
+/* Side column: compact stats on top, big thumb buttons at the bottom */
+.side { display: flex; flex-direction: column; gap: 10px; width: 104px; }
+
+.box { background: var(--panel); border-radius: 6px; padding: 6px 10px; }
+.box small { display: block; color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+.box b { font-size: 18px; }
+
+#next { width: 72px; height: 72px; display: block; margin: 0 auto; }
+
+.side-controls {
+  flex: 1;
+  min-height: 130px;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.side-controls button { flex: 1; padding: 0; font-size: 30px; }
+.side-controls button:first-child { flex: 1.6; } /* rotate is the biggest */
+
+/* Bottom row: left, right, drop, then start and pause */
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+.pad button { padding: 16px 0; }
+
+button {
+  font: inherit;
+  background: var(--btn);
+  color: var(--btn-ink);
+  border: 0;
+  border-radius: 6px;
+  padding: 12px 0;
+  font-size: 18px;
+  cursor: pointer;
+}
+button:active { transform: scale(0.96); }
+
+.start { grid-column: span 2; font-size: 16px; }
+.pause { grid-column: span 1; font-size: 16px; }

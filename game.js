@@ -4,7 +4,10 @@ const COLS = 10;
 const ROWS = 20;
 const CELL = 30;
 const LINE_POINTS = [0, 100, 300, 500, 800];
+const LINE_LABELS = ['', '', 'Double', 'Triple', 'Quad'];
 const BEST_KEY = 'amatafali-best';
+const CLEAR_MS = 420;                          // how long the line-clear effect lasts
+const GRID_COLOR = 'rgba(130, 150, 155, 0.22)'; // faint grid lines
 
 // ---------- The 7 pieces ----------
 const SHAPES = {
@@ -41,7 +44,7 @@ function createBoard() {
 let board = createBoard();
 
 // ---------- Game state ----------
-// state is one of: 'ready', 'playing', 'paused', 'over'
+// state is one of: 'ready', 'playing', 'paused', 'clearing', 'over'
 let state = 'ready';
 let piece = null;
 let nextType = null;
@@ -52,6 +55,13 @@ let level = 1;
 let best = 0;
 let dropTimer = 0;
 let lastTime = performance.now();
+
+// Line-clear effect state
+let clearingRows = [];
+let clearTimer = 0;
+let particles = [];
+let popup = null;
+let shake = 0;
 
 try {
   best = Number(localStorage.getItem(BEST_KEY)) || 0;
@@ -84,9 +94,25 @@ function drawCell(x, y, color) {
   ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
 }
 
+function drawGrid() {
+  ctx.strokeStyle = GRID_COLOR;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 1; x < COLS; x++) {
+    ctx.moveTo(x * CELL + 0.5, 0);
+    ctx.lineTo(x * CELL + 0.5, canvas.height);
+  }
+  for (let y = 1; y < ROWS; y++) {
+    ctx.moveTo(0, y * CELL + 0.5);
+    ctx.lineTo(canvas.width, y * CELL + 0.5);
+  }
+  ctx.stroke();
+}
+
 function drawBoard() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
   board.forEach((row, y) => {
+    if (clearingRows.includes(y)) return; // these are drawn by drawClearing()
     row.forEach((type, x) => {
       if (type) drawCell(x, y, COLORS[type]);
     });
@@ -124,6 +150,52 @@ function drawNext() {
   });
 }
 
+// The completed rows flash white, then each block shrinks away from the centre
+function drawClearing() {
+  const p = Math.min(1, clearTimer / CLEAR_MS); // 0 -> 1
+  clearingRows.forEach((y) => {
+    ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.35 * (1 - p)) + ')';
+    ctx.fillRect(0, y * CELL, canvas.width, CELL);
+
+    for (let x = 0; x < COLS; x++) {
+      const dist = Math.abs(x - (COLS - 1) / 2);
+      const local = Math.min(1, Math.max(0, p * 1.4 - dist * 0.08));
+      const size = (CELL - 2) * (1 - local);
+      const cx = x * CELL + CELL / 2;
+      const cy = y * CELL + CELL / 2;
+
+      ctx.fillStyle = COLORS[board[y][x]];
+      ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.9 * (1 - local)) + ')';
+      ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+    }
+  });
+}
+
+function drawParticles() {
+  particles.forEach((p) => {
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawPopup() {
+  if (!popup) return;
+  const t = popup.age / 900;
+  const y = Math.max(40, popup.y) - t * 40;
+  ctx.globalAlpha = Math.max(0, 1 - t);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 26px "Trebuchet MS", sans-serif';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.strokeText(popup.text, canvas.width / 2, y);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(popup.text, canvas.width / 2, y);
+  ctx.globalAlpha = 1;
+}
+
 function drawBanner(title, subtitle) {
   ctx.fillStyle = 'rgba(10, 16, 18, 0.75)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -136,7 +208,17 @@ function drawBanner(title, subtitle) {
 }
 
 function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+
+  // A short screen shake for big clears
+  if (shake > 0) {
+    const amp = shake / 50;
+    ctx.translate((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
+  }
+
   drawBoard();
+  if (state === 'clearing') drawClearing();
 
   if (piece && (state === 'playing' || state === 'paused')) {
     // Ghost piece: a faint copy where the piece will land
@@ -146,9 +228,32 @@ function render() {
     drawPiece(piece, piece.y);
   }
 
+  drawParticles();
+  drawPopup();
+
   if (state === 'ready') drawBanner(GAME_TITLE, 'Press Enter or tap to start');
   if (state === 'paused') drawBanner('Paused', 'Press P or tap to resume');
   if (state === 'over') drawBanner('Game over', 'Press Enter or tap to restart');
+
+  ctx.restore();
+}
+
+// ---------- Effects ----------
+function updateEffects(dt) {
+  const f = dt / 16;
+  particles.forEach((p) => {
+    p.x += p.vx * f;
+    p.y += p.vy * f;
+    p.vy += 0.18 * f;
+    p.life -= dt;
+  });
+  particles = particles.filter((p) => p.life > 0);
+
+  if (popup) {
+    popup.age += dt;
+    if (popup.age > 900) popup = null;
+  }
+  if (shake > 0) shake = Math.max(0, shake - dt);
 }
 
 // ---------- Pieces ----------
@@ -195,32 +300,80 @@ function collides(shape, offsetX, offsetY) {
   return false;
 }
 
+// Lock the piece into the board. If rows are complete, play the effect
+// first; otherwise go straight to the next piece.
 function lockPiece() {
   piece.shape.forEach((row, y) => {
     row.forEach((value, x) => {
       if (value) board[piece.y + y][piece.x + x] = piece.type;
     });
   });
-  clearLines();
+
+  const fullRows = [];
+  for (let y = 0; y < ROWS; y++) {
+    if (board[y].every(cell => cell !== null)) fullRows.push(y);
+  }
+
+  if (fullRows.length > 0) {
+    startClear(fullRows);
+  } else {
+    spawnPiece();
+  }
 }
 
 // ---------- Clearing lines ----------
-function clearLines() {
-  let cleared = 0;
-  for (let y = ROWS - 1; y >= 0; y--) {
-    if (board[y].every(cell => cell !== null)) {
-      board.splice(y, 1);
-      board.unshift(Array(COLS).fill(null));
-      cleared++;
-      y++;
+function startClear(rows) {
+  clearingRows = rows;
+  clearTimer = 0;
+  state = 'clearing';
+  piece = null;
+
+  const n = rows.length;
+  const points = LINE_POINTS[n] * level;
+  popup = {
+    text: LINE_LABELS[n] ? LINE_LABELS[n] + ' +' + points : '+' + points,
+    y: rows[0] * CELL,
+    age: 0
+  };
+  if (n >= 3) shake = 300;
+
+  // A burst of little squares from every block in the cleared rows
+  rows.forEach((y) => {
+    for (let x = 0; x < COLS; x++) {
+      const color = COLORS[board[y][x]];
+      for (let i = 0; i < 2; i++) {
+        const life = 500 + Math.random() * 300;
+        particles.push({
+          x: x * CELL + CELL / 2,
+          y: y * CELL + CELL / 2,
+          vx: (Math.random() - 0.5) * 6,
+          vy: -Math.random() * 4 - 1,
+          size: 3 + Math.random() * 3,
+          life: life,
+          max: life,
+          color: color
+        });
+      }
     }
-  }
-  if (cleared > 0) {
-    score += LINE_POINTS[cleared] * level;
-    lines += cleared;
-    level = 1 + Math.floor(lines / 10);
-    updateHud();
-  }
+  });
+}
+
+function finishClear() {
+  // Remove from the bottom-most row up so the row numbers stay correct
+  const rows = clearingRows.slice().sort((a, b) => b - a);
+  rows.forEach((y) => board.splice(y, 1));
+  rows.forEach(() => board.unshift(Array(COLS).fill(null)));
+
+  const cleared = rows.length;
+  score += LINE_POINTS[cleared] * level;
+  lines += cleared;
+  level = 1 + Math.floor(lines / 10);
+  updateHud();
+
+  clearingRows = [];
+  dropTimer = 0;
+  state = 'playing';
+  spawnPiece(); // sets state to 'over' if there is no room
 }
 
 // ---------- Moving and rotating ----------
@@ -255,7 +408,6 @@ function softDrop(byPlayer) {
     }
   } else {
     lockPiece();
-    spawnPiece();
   }
   dropTimer = 0;
 }
@@ -269,7 +421,6 @@ function hardDrop() {
   score += distance * 2;
   updateHud();
   lockPiece();
-  spawnPiece();
   dropTimer = 0;
 }
 
@@ -282,6 +433,11 @@ function startGame() {
   lines = 0;
   level = 1;
   dropTimer = 0;
+  clearingRows = [];
+  clearTimer = 0;
+  particles = [];
+  popup = null;
+  shake = 0;
   state = 'playing';
   spawnPiece();
   updateHud();
@@ -416,18 +572,23 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- Game loop ----------
 function gameLoop(time) {
+  const dt = Math.min(time - lastTime, 50);
+  lastTime = time;
+
   if (state === 'playing') {
-    dropTimer += time - lastTime;
+    dropTimer += dt;
     if (dropTimer >= dropSpeed()) {
       softDrop(false);
     }
+  } else if (state === 'clearing') {
+    clearTimer += dt;
+    if (clearTimer >= CLEAR_MS) finishClear();
   }
-  lastTime = time;
 
+  updateEffects(dt);
   render();
   requestAnimationFrame(gameLoop);
 }
 
 updateHud();
 requestAnimationFrame(gameLoop);
-
